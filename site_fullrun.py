@@ -179,6 +179,14 @@ parser.add_option("--mod_parm_file_P", dest="mod_parm_file_P", default='', \
 parser.add_option("--walltime", dest="walltime", default=6, \
                   help = "desired walltime for each job (hours)")
 
+#datasets for user-defined PFTs (by F-M Yuan, NGEE-Arctic)
+#parser.add_option("--surffile", dest="surffile", default="", \
+#                  help = 'full path of Surface file to use')
+parser.add_option("--domainfile", dest="domainfile", default="", \
+                  help = 'full path of Domain file to use')
+parser.add_option("--maxpatch_pft", dest="maxpatch_pft", default=17, \
+                  help = "user-defined max. patch PFT number, default is 17")
+
 (options, args) = parser.parse_args()
 
 #------------ define function for pbs submission
@@ -523,6 +531,15 @@ for row in AFdatareader:
           basecmd = basecmd+' --constraints '+options.constraints
         if (options.hist_vars != ''):
           basecmd = basecmd+' --hist_vars '+options.hist_vars
+
+        if (options.surffile != ''):
+            basecmd = basecmd + ' --surffile '+options.surffile
+        if (options.domainfile != ''):
+            basecmd = basecmd + ' --domainfile '+options.domainfile
+        if (options.maxpatch_pft!=17):
+            basecmd = basecmd + ' --maxpatch_pft '+options.maxpatch_pft
+
+
         if (myproject != ''):
           basecmd = basecmd+' --project '+myproject
  
