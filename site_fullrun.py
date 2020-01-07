@@ -134,6 +134,8 @@ parser.add_option("--gswp3", dest="gswp3", default=False, \
                   action="store_true", help = 'Use GSWP3 meteorology')
 parser.add_option("--princeton", dest="princeton", default=False, \
                   action="store_true", help = 'Use Princeton meteorology')
+parser.add_option("--daymet", dest="daymet", default=False, \
+                  action="store_true", help = 'Use Daymet corrected meteorology')
 parser.add_option("--surfdata_grid", dest="surfdata_grid", default=False, \
                   help = 'Use gridded surface data instead of site data', action="store_true")
 parser.add_option("--surffile", dest="surffile", default='', \
@@ -145,6 +147,8 @@ parser.add_option("--cpl_bypass", dest = "cpl_bypass", default=False, \
 parser.add_option("--spinup_vars", dest = "spinup_vars", default=False, \
                   help = "limit output variables for spinup", action="store_true")
 parser.add_option("--trans_varlist", dest = "trans_varlist", default='', help = "Transient outputs")
+parser.add_option("--dailyvars", dest="dailyvars", default=False, \
+                 action="store_true", help="Write daily ouptut variables")
 parser.add_option("--c_only", dest="c_only", default=False, \
                   help='Carbon only (saturated N&P)', action ="store_true")
 parser.add_option("--cn_only", dest="cn_only", default=False, \
@@ -166,9 +170,11 @@ parser.add_option("--add_temperature", dest="addt", default=0.0, \
 parser.add_option("--add_co2", dest="addco2", default=0.0, \
                   help = 'CO2 (ppmv) to add to atmospheric forcing')
 parser.add_option("--startdate_add_temperature", dest="sd_addt", default="99991231", \
-                  help = 'Date (YYYYMMDD) to begin addding temperature')
+                  help = 'Date (YYYYMMDD) to begin adding temperature')
 parser.add_option("--startdate_add_co2", dest="sd_addco2", default="99991231", \
-                  help = 'Date (YYYYMMDD) to begin addding CO2')
+                  help = 'Date (YYYYMMDD) to begin adding CO2')
+parser.add_option("--var_soilthickness",dest="var_soilthickness", default=False, \
+                  help = 'Use variable soil depth from surface data file',action='store_true')
 
 #Changed by Ming for mesabi
 parser.add_option("--archiveroot", dest="archiveroot", default='', \
@@ -190,6 +196,10 @@ parser.add_option("--maxpatch_pft", dest="maxpatch_pft", default=17, \
                   help = "user-defined max. patch PFT number, default is 17")
 parser.add_option("--landusefile", dest="pftdynfile", default='', \
                   help='user-defined dynamic PFT file')
+
+parser.add_option("--no_submit",dest="no_submit",default=False,action="store_true",
+                    help='Do not submit jobs')
+parser.add_option("--var_list_pft", dest="var_list_pft", default="",help='Comma-separated list of vars to output at PFT level')
 
 (options, args) = parser.parse_args()
 
@@ -508,6 +518,8 @@ for row in AFdatareader:
             basecmd = basecmd+' --princeton'
         if (options.fates_paramfile != ''):
             basecmd = basecmd+ ' --fates_paramfile '+options.fates_paramfile
+        if (options.daymet):
+            basecmd = basecmd+' --daymet'
         if (options.surfdata_grid):
             basecmd = basecmd+' --surfdata_grid'
         if (options.ensemble_file != ''):   
@@ -551,6 +563,10 @@ for row in AFdatareader:
         if (options.pftdynfile != ''):
             basecmd = basecmd + ' --landusefile '+options.pftdynfile
 
+        if (options.var_soilthickness):
+            basecmd = basecmd + ' --var_soilthickness'
+        if (options.var_list_pft != ''):
+            basecmd = basecmd + ' --var_list_pft '+options.var_list_pft
 
         if (myproject != ''):
           basecmd = basecmd+' --project '+myproject
@@ -719,6 +735,8 @@ for row in AFdatareader:
             cmd_trns = cmd_trns + ' --spinup_vars'
         if (options.trans_varlist != ''):
             cmd_trns = cmd_trns + ' --trans_varlist '+options.trans_varlist
+        if (options.dailyvars):
+            cmd_trns = cmd_trns + ' --dailyvars'
         if (options.ensemble_file != ''):  #Transient post-processing
             cmd_trns = cmd_trns + ' --postproc_file '+options.postproc_file
         if (options.diags):
@@ -1084,10 +1102,11 @@ if (options.ensemble_file == ''):
             if ('trans_diags' in thiscase and options.machine == 'cades'):
                 output.write("scp -r ./plots/"+mycaseid+" acme-webserver.ornl.gov:~/www/single_point/plots\n")
             output.close()
-            if (mysubmit_type == ''):
-                os.system('chmod u+x ./scripts/'+myscriptsdir+'/'+thiscase+'_group'+str(g)+'.pbs')
-                os.system('./scripts/'+myscriptsdir+'/'+thiscase+'_group'+str(g)+'.pbs')
-            else:
-                job_depend_run = submit('scripts/'+myscriptsdir+'/'+thiscase+'_group'+str(g)+'.pbs',job_depend= \
+            if not options.no_submit:
+                if (mysubmit_type == ''):
+                    os.system('chmod u+x ./scripts/'+myscriptsdir+'/'+thiscase+'_group'+str(g)+'.pbs')
+                    os.system('./scripts/'+myscriptsdir+'/'+thiscase+'_group'+str(g)+'.pbs')
+                else:
+                    job_depend_run = submit('scripts/'+myscriptsdir+'/'+thiscase+'_group'+str(g)+'.pbs',job_depend= \
                                     job_depend_run, submit_type=mysubmit_type)
 

@@ -823,6 +823,7 @@ if (options.mc_ensemble <= 0):
                                  str(int(ny_ad)+1)+'\n')
         output.close()
 
-        job_depend_run = submit('temp/global_'+c+'_'+str(n)+'.pbs',job_depend=job_depend_run, \
+        if not options.no_submit:
+            job_depend_run = submit('temp/global_'+c+'_'+str(n)+'.pbs',job_depend=job_depend_run, \
                                     submit_type=mysubmit_type)
         
