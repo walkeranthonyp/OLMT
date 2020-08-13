@@ -179,6 +179,10 @@ parser.add_option("--metdir", dest="metdir", default="none", \
 parser.add_option("--nopointdata", action="store_true", \
                   dest="nopointdata", help="Do NOT make point data (use data already created)", \
                   default=False)
+parser.add_option("--makepointdata_only", action="store_true", \
+                  dest="makepointdata_only", \
+                  help="make point data for later use ONLY, i.e. no model config/build/submit)", \
+                  default=False)
 #parser.add_option("--cleanlogs",dest="cleanlogs", help=\
 #                   "Removes temporary and log files that are created",\
 #                   default=False,action="store_true")
@@ -276,6 +280,20 @@ parser.add_option("--var_list_pft", dest="var_list_pft", default="",help='Comma-
 (options, args) = parser.parse_args()
 
 #-------------------------------------------------------------------------------
+# If only make point(s) data, reset relevant options.
+if (options.makepointdata_only):
+    options.no_config   = True
+    options.no_build    = True
+    options.no_submit   = True
+    options.nopointdata = False
+    options.domainfile  = ""
+    options.surffile = ""
+    options.pftdynfile=""
+    options.nopftdyn = False
+elif(options.domainfile!="" and options.surffile!="" and \
+    (options.nopftdyn or options.pftdynfile!="")):
+    options.nopointdata = True
+    
 
 #Set default model root
 if (options.csmdir == ''):
@@ -555,7 +573,12 @@ if (options.nopointdata == False):
             ptcmd = ptcmd+' --point_list '+options.point_list
 
     else:
-        ptcmd = ptcmd + ' --site '+options.site+' --sitegroup '+options.sitegroup       
+        ptcmd = ptcmd + ' --site '+options.site+' --sitegroup '+options.sitegroup
+
+    if(options.domainfile != ''):
+        ptcmd = ptcmd + ' --nodomain '
+    if(options.surffile !=''):
+        ptcmd = ptcmd + ' --nosurfdata '
 
     if (options.machine == 'eos' or options.machine == 'titan'):
         os.system('rm temp/*.nc')
@@ -598,6 +621,22 @@ if (options.nopointdata == False):
         if (result > 0):
             print ('PointCLM:  Error creating point data.  Aborting')
             sys.exit(1)
+
+    if(options.makepointdata_only):
+        print ('PointCLM:  Successfully creating point data ONLY, i.e. no further config/build/run CLM/ELM')
+        print ('PointCLM:  Files are in ./temp/*.nc, which you may save/rename properly for later use')
+        sys.exit(0)
+
+if(options.domainfile != ''):
+    print('\n -----INFO: using user-provided DOMAIN')
+    print('domain file: '+ options.domainfile)
+if(options.surffile !=''):
+    print('\n -----INFO: using user-provided SURFDATA')
+    print('surface data file: '+ options.surffile)
+if(options.pftdynfile !='' or options.nopftdyn):
+    print('\n -----INFO: using user-provided 20th landuse data file')
+    print('20th landuse data file: '+ options.pftdynfile+"'\n")
+
 
 #get site year information
 sitedatadir = os.path.abspath(PTCLMfiledir)
@@ -1280,7 +1319,7 @@ for i in range(1,int(options.ninst)+1):
                 output.write(" metdata_bypass = '"+options.ccsm_input+"/atm/datm7/" \
                           +"atm_forcing.cpl.CBGC1850S.ne30.c181011/cpl_bypass_full'\n")
 #                         +"atm_forcing.cpl.WCYCL1850S.ne30.c171204/cpl_bypass_full'\n")
-        elif options.metdir != '':
+        elif options.metdir != 'none':
             output.write(" metdata_type = 'gswp3v1_daymet'\n") # This needs to be updated for other types
             output.write(" metdata_bypass = '%s'\n"%options.metdir)
         else:

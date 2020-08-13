@@ -65,6 +65,10 @@ parser.add_option("--notrans", action="store_true", dest="notrans", default=Fals
                   help='Do not perform transient simulation (spinup only)')
 parser.add_option("--nopointdata", action="store_true", dest="nopointdata", \
                   default=False, help="do not generate point data")
+parser.add_option("--makepointdata_only", action="store_true", \
+                  dest="makepointdata_only", \
+                  help="make point data for later use ONLY, i.e. no model build/run)", \
+                  default=False)
 parser.add_option("--nyears_final_spinup", dest="nyears_final_spinup", default='200', \
                   help="base no. of years for final spinup")
 parser.add_option("--parm_list", dest="parm_list", default='parm_list', \
@@ -258,6 +262,12 @@ elif ('anvil' in options.machine):
 elif ('compy' in options.machine):
     ccsm_input = '/compyfs/inputdata'
 
+if (options.makepointdata_only): # don't configure/build/run model
+    options.noad = False
+    options.nofn = True
+    options.notrans = True
+    options.nopointdata = False
+    
 print(options.machine)
 #default compilers
 if (options.compiler == ''):
@@ -329,14 +339,14 @@ csmdir = options.csmdir
 myuser = getpass.getuser()
 myproject=''
 if (options.project != ''):
-  myproject = options.project
+    myproject = options.project
 else: 
-  if (os.path.exists(os.environ.get('HOME')+'/.cesm_proj')):
-    print('Getting project from '+os.environ.get('HOME')+'/.cesm_proj')
-    myinput = open(os.environ.get('HOME')+'/.cesm_proj','r')
-    for s in myinput:
-        myproject=s[:-1]
-    print('Project = '+myproject)
+    if (os.path.exists(os.environ.get('HOME')+'/.cesm_proj')):
+        print('Getting project from '+os.environ.get('HOME')+'/.cesm_proj')
+        myinput = open(os.environ.get('HOME')+'/.cesm_proj','r')
+        for s in myinput:
+            myproject=s[:-1]
+        print('Project = '+myproject)
  
 #case run and case root directories
 if (options.runroot == ''):
@@ -363,13 +373,13 @@ if (options.cruncep or options.cruncepv8 or options.gswp3 or options.princeton o
     startyear = 1901
     endyear = 1920
     if (options.cruncep):
-       site_endyear = 2013
+        site_endyear = 2013
     elif (options.cruncepv8):
-       site_endyear = 2016   
+        site_endyear = 2016   
     elif (options.gswp3):
-       site_endyear = 2010
+        site_endyear = 2010
     elif (options.princeton):
-       site_endyear = 2012
+        site_endyear = 2012
     if (options.livneh):
         startyear = 1950
         endyear = 1969
@@ -380,10 +390,10 @@ if (options.cruncep or options.cruncepv8 or options.gswp3 or options.princeton o
         site_endyear = 2017
 
 elif (options.site_forcing):
-   #UMB only - test case
-   startyear=2000
-   endyear=2014
-   site_endyear=2014
+    #UMB only - test case
+    startyear=2000
+    endyear=2014
+    site_endyear=2014
 else:
     #Qian input data
     startyear = 1948
@@ -441,6 +451,8 @@ if (mycaseid != ''):
     basecmd = basecmd+' --caseidprefix '+mycaseid
 if (options.nopointdata):
     basecmd = basecmd+' --nopointdata'
+if (options.makepointdata_only):
+    basecmd = basecmd+' --makepointdata_only'
 if (options.project != ''):
     basecmd = basecmd+' --project '+options.project
 if (options.parm_vals != ''):
@@ -571,10 +583,10 @@ else:
         +' --hist_nhtfrq '+str(options.hist_nhtfrq_spinup)+' --compset '+ \
         mymodel_adsp
 if (options.exeroot != ''):
-  ad_exeroot = os.path.abspath(options.exeroot)
-  cmd_adsp = cmd_adsp+' --no_build --exeroot '+ad_exeroot
+    ad_exeroot = os.path.abspath(options.exeroot)
+    cmd_adsp = cmd_adsp+' --no_build --exeroot '+ad_exeroot
 elif (not options.noad):
-  ad_exeroot = os.path.abspath(runroot+'/'+ad_case+'/bld')
+    ad_exeroot = os.path.abspath(runroot+'/'+ad_case+'/bld')
 
 if (options.spinup_vars):
     cmd_adsp = cmd_adsp+' --spinup_vars'
@@ -598,7 +610,7 @@ if (options.noad):
         cmd_fnsp = cmd_fnsp+' --no_build --exeroot '+os.path.abspath(options.exeroot)
         ad_exeroot = os.path.abspath(options.exeroot)
     else:
-      ad_exeroot = os.path.abspath(runroot+'/'+basecase)
+        ad_exeroot = os.path.abspath(runroot+'/'+basecase)
 else:
     cmd_fnsp = basecmd+' --finidat_case '+ad_case+' '+ \
         '--finidat_year '+str(int(ny_ad)+1)+' --run_units nyears --run_n '+ \
@@ -689,11 +701,11 @@ if (options.mc_ensemble <= 0):
         run_n_total = int(translen)
     elif ('ICBCLM45' in c):
         if (int(options.run_startyear) > 0):
-          model_startdate = int(options.run_startyear)
-          run_n_total = int(fsplen)
+            model_startdate = int(options.run_startyear)
+            run_n_total = int(fsplen)
         else:  
-          model_startdate = 1850
-          run_n_total = int(translen)
+            model_startdate = 1850
+            run_n_total = int(translen)
     else:
         run_n_total = int(fsplen)
     runblock =  min(int(options.runblock), run_n_total)
@@ -721,9 +733,9 @@ if (options.mc_ensemble <= 0):
                             int(float(options.walltime)))*60))+':00'
                 if (options.debug):
                     if ('cori' in options.machine):
-                      timestr='00:30:00'
+                        timestr='00:30:00'
                     elif ('compy' in options.machine):
-                      timestr='02:00:00'
+                        timestr='02:00:00'
                 if ('cades' in options.machine):
                     output.write("#!/bin/bash -f\n")
                 else:
@@ -732,23 +744,23 @@ if (options.mc_ensemble <= 0):
                     output.write('#PBS -l walltime='+timestr+'\n')
                 else:
                     if (myproject != ''):
-                      output.write('#SBATCH -A '+myproject+'\n')
+                        output.write('#SBATCH -A '+myproject+'\n')
                     output.write('#SBATCH --time='+timestr+'\n')
                     if ('anvil' in options.machine):
-                      output.write('#SBATCH --partition=acme-centos6\n')
-                      output.write('#SBATCH --account=condo\n')
+                        output.write('#SBATCH --partition=acme-centos6\n')
+                        output.write('#SBATCH --account=condo\n')
                     if ('cori' in options.machine or 'edison' in options.machine):
-                         if (options.debug):
-                             output.write('#SBATCH --partition=debug\n')
-                         else:
-                             output.write('#SBATCH --partition=regular\n')
+                        if (options.debug):
+                            output.write('#SBATCH --partition=debug\n')
+                        else:
+                            output.write('#SBATCH --partition=regular\n')
                     if ('compy' in options.machine and options.debug):
-                      output.write('#SBATCH -p short\n')
+                        output.write('#SBATCH -p short\n')
                     if ('cades' in options.machine):
-                      output.write('#SBATCH -A ccsi\n')
-                      output.write('#SBATCH -p batch\n')
-                      output.write('#SBATCH --mem=64G\n')
-                      output.write('#SBATCH --ntasks-per-node 32\n')
+                        output.write('#SBATCH -A ccsi\n')
+                        output.write('#SBATCH -p batch\n')
+                        output.write('#SBATCH --mem=64G\n')
+                        output.write('#SBATCH --ntasks-per-node 32\n')
             elif ("#!" in s or "#PBS" in s or "#SBATCH" in s):
                 output.write(s)
         input.close()
@@ -791,9 +803,9 @@ if (options.mc_ensemble <= 0):
         output.write("cd "+caseroot+'/'+c+"/\n")
         output.write("./xmlchange -id STOP_N -val "+str(this_run_n)+'\n')
         if (options.cplhist):
-          output.write("./xmlchange -id REST_N -val 25\n")
+            output.write("./xmlchange -id REST_N -val 25\n")
         else:
-          output.write("./xmlchange -id REST_N -val 20\n")   #Restart every 20 years in global mode
+            output.write("./xmlchange -id REST_N -val 20\n")   #Restart every 20 years in global mode
         output.write("./xmlchange -id RUN_STARTDATE -val "+(str(10000+model_startdate))[1:]+ \
                          '-01-01\n')                           
         if (n > 0):
