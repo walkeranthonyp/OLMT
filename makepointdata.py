@@ -181,8 +181,8 @@ elif ('f19' in options.res):
     latixy_centers = (numpy.cumsum(numpy.ones([96]))-1)*(180.0/95) - 90.0
     latixy = numpy.zeros([97], numpy.float)
     longxy[0]   = 0
-    latixy[0]   =  -90
-    latixy[96]  =  90
+    latixy[0]   = -90
+    latixy[96]  = 90
     for i in range(1,96):
         latixy[i] = (latixy_centers[i-1]+latixy_centers[i])/2.0
 elif ('f09' in options.res):
@@ -234,13 +234,16 @@ for n in range(0,n_grids):
         if (lon_bounds[0] == 180 and lon_bounds[1] == 180):  #global
             xgrid_min[n] = 0
             xgrid_max[n] = longxy.shape[0]-2
+        
         for i in range(0,latixy.shape[0]-1):
             if (lat_bounds[0] >= latixy[i]):
                 ygrid_min[n] = i
                 ygrid_max[n] = i
             elif (lat_bounds[1] >= latixy[i+1]):
                 ygrid_max[n] = i
-    #print n, lat[n], lon[n], xgrid_max[n], ygrid_max[n]
+    #print(n, lat[n], lon[n], xgrid_min[n], ygrid_min[n], \
+    #                         xgrid_max[n], ygrid_max[n])
+
 if (n_grids > 1 and options.site == ''):       #remove duplicate points
     n_grids_uniq = 1
     n_dups = 0
@@ -251,25 +254,44 @@ if (n_grids > 1 and options.site == ''):       #remove duplicate points
     point_pfts_uniq = [point_pfts[0]]
     point_index = [1]
     myoutput = open('point_list_output.txt','w')
-    myoutput.write(str(lon[0])+','+str(lat[0])+','+str(point_index[0])+'\n')
+    myoutput.write(str(lon[0])+','+str(lat[0])+','+str(point_index[0])+','+ \
+                   str(xgrid_min_uniq[0])+','+str(ygrid_min_uniq[0])+'\n')
+    
+    print('Total grids', n_grids)
     for n in range (1,n_grids):
         is_unique = True
-        for m in range(0,n_grids_uniq):
-            if (xgrid_min[n] == xgrid_min_uniq[m] and ygrid_min[n] == ygrid_min_uniq[m] \
-                  and point_pfts[n] == point_pfts_uniq[m]):
-                n_dups = n_dups+1
-                is_unique = False
-                #point_index.append(m+1)
-        if (is_unique or options.keep_duplicates):
+        
+        # the following is time-costing
+        #for m in range(0,n_grids_uniq):
+        #    if (xgrid_min[n] == xgrid_min_uniq[m] and ygrid_min[n] == ygrid_min_uniq[m] \
+        #          and point_pfts[n] == point_pfts_uniq[m]):
+        #        n_dups = n_dups+1
+        #        is_unique = False
+        if not options.keep_duplicates:
+            xidx = numpy.where(numpy.asarray(xgrid_min_uniq) == xgrid_min[n])
+            #print(len(xidx[0]), xgrid_min_uniq, xgrid_min[n])
+            if len(xidx[0])>0: # more than 0 indicates duplicated 'x'
+                # search 'y indx' in same positions of 'ygrid_min_uniq' 
+                yidx = numpy.where(numpy.asarray(ygrid_min_uniq)[xidx] == ygrid_min[n])
+                if len(yidx[0])>0: # both 'x','y' have duplicated points
+                    pidx = numpy.where(numpy.asarray(point_pfts_uniq)[xidx[0][yidx]] == point_pfts[n])
+                    if len(pidx[0])>0:
+                        n_dups = n_dups + 1
+                        is_unique = False
+        
+        #print(n,n_grids_uniq)
+        if (is_unique):
             xgrid_min_uniq.append(xgrid_min[n])
             ygrid_min_uniq.append(ygrid_min[n])
-            point_pfts_uniq.append(point_pfts[n])      
+            point_pfts_uniq.append(point_pfts[n])
             lon_uniq.append(lon[n])
             lat_uniq.append(lat[n])
             n_grids_uniq = n_grids_uniq+1
             point_index.append(n_grids_uniq)
-        myoutput.write(str(lon[n])+','+str(lat[n])+','+str(point_index[n])+'\n')
+            myoutput.write(str(lon[n])+','+str(lat[n])+','+str(point_index[n_grids_uniq-1])+','+ \
+                       str(xgrid_min_uniq[n_grids_uniq-1])+','+str(ygrid_min_uniq[n_grids_uniq-1])+'\n')
     myoutput.close()
+    
     xgrid_min = xgrid_min_uniq
     xgrid_max = xgrid_min_uniq
     ygrid_min = ygrid_min_uniq
@@ -278,20 +300,22 @@ if (n_grids > 1 and options.site == ''):       #remove duplicate points
     lat = lat_uniq
     point_pfts = point_pfts_uniq
     n_grids = n_grids_uniq
-    print(n_grids, ' Unique points')
-    print(n_dups, ' duplicate points removed')
-    print(len(point_index))
-    print(point_index)
+    if (not options.keep_duplicates):
+        print(n_grids, ' Unique points')
+        print(n_dups, ' duplicate points removed')
+    
+    #print(len(point_index),' points')
+    #print(point_index)
 
 #---------------------Create domain data --------------------------------------------------
 
 if(options.nodomain == False):
-    print('Creating domain data')
+    print('\nCreating domain data')
     os.system('mkdir -p ./temp')
     
     domainfile_list=''
     for n in range(0,n_grids):
-        nst = str(100000+n)[1:]
+        nst = str(1000000+n)[1:]
         domainfile_new = './temp/domain'+nst+'.nc'
         if (not os.path.exists(domainfile_orig)):
             print('Error:  '+domainfile_orig+' does not exist.  Aborting')
@@ -300,7 +324,7 @@ if(options.nodomain == False):
         if (isglobal):
             os.system('cp '+domainfile_orig+' '+domainfile_new)
         else:
-            os.system('ncks -d ni,'+str(xgrid_min[n])+','+str(xgrid_max[n])+' -d nj,'+str(ygrid_min[n])+ \
+            os.system('ncks -h -d ni,'+str(xgrid_min[n])+','+str(xgrid_max[n])+' -d nj,'+str(ygrid_min[n])+ \
                   ','+str(ygrid_max[n])+' '+domainfile_orig+' '+domainfile_new)
     
         if (issite):
@@ -333,10 +357,10 @@ if(options.nodomain == False):
            
             ierr = nffun.putvar(domainfile_new, 'frac', frac)
             ierr = nffun.putvar(domainfile_new, 'mask', mask)
-            os.system('ncks -O --mk_rec_dim nj '+domainfile_new+' '+domainfile_new)
+            os.system('ncks  -h -O --mk_rec_dim nj '+domainfile_new+' '+domainfile_new)
         elif (options.mymask != ''):
             print('Applying mask from '+options.mymask)
-            os.system('ncks -d lon,'+str(xgrid_min[n])+','+str(xgrid_max[n])+' -d lat,'+str(ygrid_min[n])+ \
+            os.system('ncks -h -d lon,'+str(xgrid_min[n])+','+str(xgrid_max[n])+' -d lat,'+str(ygrid_min[n])+ \
                   ','+str(ygrid_max[n])+' '+options.mymask+' mask_temp.nc')
             newmask = nffun.getvar('mask_temp.nc', 'PNW_mask')
             ierr = nffun.putvar(domainfile_new, 'mask', newmask)
@@ -346,26 +370,27 @@ if(options.nodomain == False):
     
     domainfile_new = './temp/domain.nc'
     if (n_grids > 1):
-        os.system('ncrcat '+domainfile_list+' '+domainfile_new)
+        os.system('ncrcat -h '+domainfile_list+' '+domainfile_new)
         os.system('nccopy -u  '+domainfile_new+' '+domainfile_new+'.tmp')
-        os.system('ncpdq -O -a ni,nj '+domainfile_new+'.tmp '+domainfile_new)
-        #os.system('ncwa -O -a ni -d ni,0,0 '+domainfile_new+'.tmp1 '+domainfile_new+'.tmp2')
+        os.system('ncpdq -h -O -a ni,nj '+domainfile_new+'.tmp '+domainfile_new)
+        #os.system('ncwa -h -O -a ni -d ni,0,0 '+domainfile_new+'.tmp1 '+domainfile_new+'.tmp2')
         os.system('ncrename -h -O -d ni,ni_temp '+domainfile_new+' '+domainfile_new+' ')
         os.system('ncrename -h -O -d nj,ni '+domainfile_new+' '+domainfile_new+' ')
         os.system('ncrename -h -O -d ni_temp,nj '+domainfile_new+' '+domainfile_new+' ')
-        os.system('rm ./temp/domain?????.nc*')
-        #os.system('mv '+domainfile_new+'.tmp3 '+domainfile_new)
-        #os.system('rm '+domainfile_new+'.tmp*')
+        os.system('rm ./temp/domain??????.nc*')
+        os.system('rm '+domainfile_new+'.tmp*')
     else:
         os.system('mv '+domainfile_list+' '+domainfile_new)
-
+    
+    #
+    print("INFO: Extracted and Compiled '"+ domainfile_new + "' FROM: '" + domainfile_orig+"'! \n")
 #-------------------- create surface data ----------------------------------
 if(options.nosurfdata == False):
-    print('Creating surface data')
+    print('\nCreating surface data')
     
     surffile_list = ''
     for n in range(0,n_grids):
-        nst = str(100000+n)[1:]
+        nst = str(1000000+n)[1:]
         surffile_new =  './temp/surfdata'+nst+'.nc'
         if (not os.path.exists(surffile_orig)):
             print('Error:  '+surffile_orig+' does not exist.  Aborting')
@@ -374,10 +399,10 @@ if(options.nosurfdata == False):
             os.system('cp '+surffile_orig+' '+surffile_new)
         else:
             if ('ne' in options.res):
-                os.system('ncks --fix_rec_dmn time -d gridcell,'+str(xgrid_min[n])+','+str(xgrid_max[n])+ \
+                os.system('ncks -h --fix_rec_dmn time -d gridcell,'+str(xgrid_min[n])+','+str(xgrid_max[n])+ \
                 ' '+surffile_orig+' '+surffile_new)
             else:
-                os.system('ncks --fix_rec_dmn time -d lsmlon,'+str(xgrid_min[n])+','+str(xgrid_max[n])+ \
+                os.system('ncks -h --fix_rec_dmn time -d lsmlon,'+str(xgrid_min[n])+','+str(xgrid_max[n])+ \
                  ' -d lsmlat,'+str(ygrid_min[n])+','+str(ygrid_max[n])+' '+surffile_orig+' '+surffile_new)
     
         if (issite):
@@ -572,12 +597,13 @@ if(options.nosurfdata == False):
     
     if (n_grids > 1):
         os.system('ncecat '+surffile_list+' '+surffile_new)
-        os.system('rm ./temp/surfdata?????.nc*')
+        #os.system('rm ./temp/surfdata?????.nc*')
+        os.system('find ./temp/ -name "surfdata??????.nc*" -exec rm {} \;')
         #remove ni dimension
-        os.system('ncwa -O -a lsmlat -d lsmlat,0,0 '+surffile_new+' '+surffile_new+'.tmp')
+        os.system('ncwa -h -O -a lsmlat -d lsmlat,0,0 '+surffile_new+' '+surffile_new+'.tmp')
         os.system('nccopy -3 -u '+surffile_new+'.tmp'+' '+surffile_new+'.tmp2')
-        os.system('ncpdq -a lsmlon,record '+surffile_new+'.tmp2 '+surffile_new+'.tmp3')
-        os.system('ncwa -O -a lsmlon -d lsmlon,0,0 '+surffile_new+'.tmp3 '+surffile_new+'.tmp4')
+        os.system('ncpdq -h -a lsmlon,record '+surffile_new+'.tmp2 '+surffile_new+'.tmp3')
+        os.system('ncwa -h -O -a lsmlon -d lsmlon,0,0 '+surffile_new+'.tmp3 '+surffile_new+'.tmp4')
         os.system('ncrename -h -O -d record,gridcell '+surffile_new+'.tmp4 '+surffile_new+'.tmp5')
     
         os.system('mv '+surffile_new+'.tmp5 '+surffile_new)
@@ -585,12 +611,13 @@ if(options.nosurfdata == False):
     else:
         os.system('mv '+surffile_list+' '+surffile_new)
 
+    print("INFO: Extracted and Compiled '"+ surffile_new + "' FROM: '" + surffile_orig+"'! \n")
 
 #-------------------- create pftdyn surface data ----------------------------------
 
 if (options.nopftdyn == False):
 
-    print('Creating dynpft data')
+    print('\nCreating dynpft data')
     pftdyn_list = ''
     for n in range(0,n_grids):
         nst = str(100000+n)[1:]
@@ -603,10 +630,10 @@ if (options.nopftdyn == False):
             os.system('cp '+pftdyn_orig+' '+pftdyn_new)
         else:
             if ('ne' in options.res):
-                os.system('ncks --fix_rec_dmn time -d gridcell,'+str(xgrid_min[n])+','+str(xgrid_max[n])+ \
+                os.system('ncks -h --fix_rec_dmn time -d gridcell,'+str(xgrid_min[n])+','+str(xgrid_max[n])+ \
                       ' '+pftdyn_orig+' '+pftdyn_new)
             else:
-                os.system('ncks --fix_rec_dmn time -d lsmlon,'+str(xgrid_min[n])+','+str(xgrid_max[n])+ \
+                os.system('ncks -h --fix_rec_dmn time -d lsmlon,'+str(xgrid_min[n])+','+str(xgrid_max[n])+ \
                       ' -d lsmlat,'+str(ygrid_min[n])+','+str(ygrid_max[n])+' '+pftdyn_orig+' '+pftdyn_new)
         if (issite):
             landfrac     = nffun.getvar(pftdyn_new, 'LANDFRAC_PFT')
@@ -749,7 +776,8 @@ if (options.nopftdyn == False):
     if (n_grids > 1):
         os.system('ncecat '+pftdyn_list+' '+pftdyn_new)
 
-        os.system('rm ./temp/surfdata.pftdyn?????.nc*')
+        #os.system('rm ./temp/surfdata.pftdyn?????.nc*') # 'rm' not works for too long file list
+        os.system('find ./temp/ -name "surfdata.pftdyn??????.nc*" -exec rm {} \;')
         #remove ni dimension
         os.system('ncwa -O -a lsmlat -d lsmlat,0,0 '+pftdyn_new+' '+pftdyn_new+'.tmp')
         os.system('nccopy -3 -u '+pftdyn_new+'.tmp'+' '+pftdyn_new+'.tmp2')
@@ -761,3 +789,7 @@ if (options.nopftdyn == False):
         os.system('rm '+pftdyn_new+'.tmp*')
     else:
         os.system('mv '+pftdyn_list+' '+pftdyn_new)
+
+    print("INFO: Extracted and Compiled '"+ pftdyn_new + "' FROM: '" + pftdyn_orig+"'! \n")
+
+
