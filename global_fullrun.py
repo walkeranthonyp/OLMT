@@ -663,16 +663,20 @@ os.system('mkdir -p temp')
 #build cases
 if (options.noad == False):
     print('\nSetting up ad_spinup case\n')
-    os.system(cmd_adsp)
+    ierror = os.system(cmd_adsp)
+    if ierror != 0: sys.exit(-1)
 if (options.nofn == False):
     print('\nSetting up final spinup case\n')
-    os.system(cmd_fnsp)
+    ierror = os.system(cmd_fnsp)
+    if ierror != 0: sys.exit(-1)
 if (options.notrans == False):
     print('\nSetting up transient case\n')
-    os.system(cmd_trns)
+    ierror = os.system(cmd_trns)
+    if ierror != 0: sys.exit(-1)
 if ((options.cruncep or options.gswp3 or options.cruncepv8) and not options.cpl_bypass):
     print('\nSetting up transient case phase 2\n')
-    os.system(cmd_trns2)
+    ierror = os.system(cmd_trns2)
+    if ierror != 0: sys.exit(-1)
         
 
 cases=[]
