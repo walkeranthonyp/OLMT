@@ -27,6 +27,10 @@ parser.add_option("--pft", dest="mypft", default=-1, \
                   help = 'Replace all gridcell PFT with this value')
 parser.add_option("--point_list", dest="point_list", default='', \
                   help = 'File containing list of points to run (unstructured)')
+parser.add_option("--point_area_kmxkm", dest="point_area_km2", default=None, \
+                  help = 'user-specific area in km2 of each point in point list (unstructured')
+parser.add_option("--point_area_degxdeg", dest="point_area_deg2", default=None, \
+                  help = 'user-specific area in degreeXdegree of each point in point list (unstructured')
 parser.add_option("--keep_duplicates", dest="keep_duplicates", default=False, \
                   help = 'Keep duplicate points', action='store_true')
 parser.add_option("--ccsm_input", dest="ccsm_input", \
@@ -313,6 +317,9 @@ if(options.nodomain == False):
     print('\nCreating domain data')
     os.system('mkdir -p ./temp')
     
+    # 'AREA' in surfdata.nc is in KM2, which later used for scaling a point
+    area_orig = nffun.getvar(surffile_orig, 'AREA')
+
     domainfile_list=''
     for n in range(0,n_grids):
         nst = str(1000000+n)[1:]
@@ -327,6 +334,26 @@ if(options.nodomain == False):
             os.system('ncks -h -d ni,'+str(xgrid_min[n])+','+str(xgrid_max[n])+' -d nj,'+str(ygrid_min[n])+ \
                   ','+str(ygrid_max[n])+' '+domainfile_orig+' '+domainfile_new)
     
+        # scaling x/y length for original grid
+        if (options.point_area_km2 != None):
+            area_n = area_orig[ygrid_min[n],xgrid_min[n]]
+            if(float(area_n)>0.0):
+                # asssuming a square of area (km2) in projected flat surface system
+                # its longitude/latitude range not square anymore
+                # (note: this is very coarse estimation)
+                side_km = math.sqrt(float(options.point_area_km2))
+                if(lat[n]==90.0): lat[n]=lat[n]-0.00001
+                if(lat[n]==-90.0): lat[n]=lat[n]+0.00001
+                ratio_lon2lat = math.cos(math.radians(lat[n]))
+                yscalar = side_km/math.sqrt(area_n)
+                xscalar = yscalar/ratio_lon2lat
+        if (options.point_area_deg2 != None):
+            area_n = area_orig[ygrid_min[n],xgrid_min[n]]
+            if(float(area_n)>0.0):
+                side_deg = math.sqrt(float(options.point_area_deg2)) # degx X degy, NOT square radians
+                yscalar = side_deg/resy
+                xscalar = side_deg/resx
+
         if (issite):
             frac = nffun.getvar(domainfile_new, 'frac')
             mask = nffun.getvar(domainfile_new, 'mask')
@@ -337,6 +364,7 @@ if(options.nodomain == False):
             area = nffun.getvar(domainfile_new, 'area')
             frac[0] = 1.0
             mask[0] = 1
+
             if (options.site != ''):
                 xc[0] = lon[n]
                 yc[0] = lat[n]
@@ -354,7 +382,27 @@ if(options.nodomain == False):
                 ierr = nffun.putvar(domainfile_new, 'xv', xv)
                 ierr = nffun.putvar(domainfile_new, 'yv', yv)
                 ierr = nffun.putvar(domainfile_new, 'area', area)
-           
+            
+            elif (options.point_area_km2 != None or options.point_area_deg2 != None):
+                xc[0] = lon[n]
+                yc[0] = lat[n]
+                xv[0][0][0] = lon[n]-resx*xscalar
+                xv[0][0][1] = lon[n]+resx*xscalar
+                xv[0][0][2] = lon[n]-resx*xscalar
+                xv[0][0][3] = lon[n]+resx*xscalar
+                yv[0][0][0] = lat[n]-resy*yscalar
+                yv[0][0][1] = lat[n]-resy*yscalar
+                yv[0][0][2] = lat[n]+resy*yscalar
+                yv[0][0][3] = lat[n]+resy*yscalar
+                area[0] = area[0]*xscalar*yscalar
+                ierr = nffun.putvar(domainfile_new, 'xc', xc)
+                ierr = nffun.putvar(domainfile_new, 'yc', yc)
+                ierr = nffun.putvar(domainfile_new, 'xv', xv)
+                ierr = nffun.putvar(domainfile_new, 'yv', yv)
+                ierr = nffun.putvar(domainfile_new, 'area', area)
+            
+            
+            
             ierr = nffun.putvar(domainfile_new, 'frac', frac)
             ierr = nffun.putvar(domainfile_new, 'mask', mask)
             os.system('ncks  -h -O --mk_rec_dim nj '+domainfile_new+' '+domainfile_new)
@@ -378,12 +426,17 @@ if(options.nodomain == False):
         os.system('ncrename -h -O -d nj,ni '+domainfile_new+' '+domainfile_new+' ')
         os.system('ncrename -h -O -d ni_temp,nj '+domainfile_new+' '+domainfile_new+' ')
         os.system('rm ./temp/domain??????.nc*')
+        #os.system('rm ./temp/domain??????.nc*')
+        os.system('find ./temp/ -name "domain??????.nc*" -exec rm {} \;')
         os.system('rm '+domainfile_new+'.tmp*')
     else:
         os.system('mv '+domainfile_list+' '+domainfile_new)
     
     #
+    #os.system("ncap2 -h -s '{xc(0:)=lon; yc(0:)=lat})' " + domainfile_new.nc+" "+ domainfile_new.nc)
+    #
     print("INFO: Extracted and Compiled '"+ domainfile_new + "' FROM: '" + domainfile_orig+"'! \n")
+
 #-------------------- create surface data ----------------------------------
 if(options.nosurfdata == False):
     print('\nCreating surface data')
@@ -468,7 +521,7 @@ if(options.nosurfdata == False):
                             mypft_frac[int(row[2+2*thispft])]=float(row[1+2*thispft])
                 if (sum(mypft_frac[0:npft+npft_crop]) == 0.0):
                     print('*** Warning:  PFT data NOT found.  Using gridded data ***')
-            #read file for site-specific soil information
+                #read file for site-specific soil information
                 AFdatareader = csv.reader(open(ccsm_input+'/lnd/clm2/PTCLM/'+options.sitegroup+'_soildata.txt','r'))
                 for row in AFdatareader:
                     if row[0] == options.site:
@@ -478,7 +531,13 @@ if(options.nosurfdata == False):
                     print('*** Warning:  Soil data NOT found.  Using gridded data ***')
             else:
                 try:
-                    mypft_frac[point_pfts[n]] = 100.0
+                    
+                    if(point_pfts[n]!=-1): 
+                        mypft_frac[point_pfts[n]] = 100.0
+                        mypct_sand = pct_sand
+                        mypct_clay = pct_clay
+                    else:
+                        mypft_frac = pct_pft
                 except NameError:
                     print('using PFT information from surface data')
     
@@ -489,7 +548,16 @@ if(options.nosurfdata == False):
                 longxy[0][0] = lon[n]
                 latixy[0][0] = lat[n]
                 area[0] = 111.2*resy*111.321*math.cos((lon[n]*resx)*math.pi/180)*resx
-    
+            elif (options.point_area_km2 != None):
+                longxy[0][0] = lon[n]
+                latixy[0][0] = lat[n]
+                area[0] = float(options.point_area_km2)
+            elif (options.point_area_deg2 != None): # degx X degy (NOT square radians of area)
+                longxy[0][0] = lon[n]
+                latixy[0][0] = lat[n]
+                side_deg = math.sqrt(float(options.point_area_deg2)) # a square of lat/lon degrees assummed
+                area[0][0] = 111.2*side_deg*111.321*math.cos((lon[n]*side_deg)*math.pi/180)*side_deg
+                
             if (not options.surfdata_grid or sum(mypft_frac[0:npft+npft_crop]) > 0.0):
                 pct_wetland[0][0] = 0.0
                 pct_lake[0][0]    = 0.0
@@ -620,7 +688,7 @@ if (options.nopftdyn == False):
     print('\nCreating dynpft data')
     pftdyn_list = ''
     for n in range(0,n_grids):
-        nst = str(100000+n)[1:]
+        nst = str(1000000+n)[1:]
         pftdyn_new = './temp/surfdata.pftdyn'+nst+'.nc'
         
         if (not os.path.exists(pftdyn_orig)):
@@ -691,6 +759,15 @@ if (options.nopftdyn == False):
                 longxy[0][0] = lon[n]
                 latixy[0][0] = lat[n]
                 area[0][0] = 111.2*resy*111.321*math.cos((lon[n]*resx)*math.pi/180)*resx
+            elif (options.point_area_km2 != None):
+                longxy[0][0] = lon[n]
+                latixy[0][0] = lat[n]
+                area[0] = float(options.point_area_km2)
+            elif (options.point_area_deg2 != None): # degx X degy (NOT square radians of area)
+                longxy[0][0] = lon[n]
+                latixy[0][0] = lat[n]
+                side_deg = math.sqrt(float(options.point_area_deg2)) # a square of lat/lon degrees assummed
+                area[0][0] = 111.2*side_deg*111.321*math.cos((lon[n]*side_deg)*math.pi/180)*side_deg
             thisrow = 0
             for t in range(0,nyears_landuse):     
                 if (options.surfdata_grid == False):
@@ -774,15 +851,15 @@ if (options.nopftdyn == False):
         os.system('rm -rf '+pftdyn_new)
 
     if (n_grids > 1):
-        os.system('ncecat '+pftdyn_list+' '+pftdyn_new)
+        os.system('ncecat -h '+pftdyn_list+' '+pftdyn_new)
 
         #os.system('rm ./temp/surfdata.pftdyn?????.nc*') # 'rm' not works for too long file list
         os.system('find ./temp/ -name "surfdata.pftdyn??????.nc*" -exec rm {} \;')
         #remove ni dimension
-        os.system('ncwa -O -a lsmlat -d lsmlat,0,0 '+pftdyn_new+' '+pftdyn_new+'.tmp')
+        os.system('ncwa -h -O -a lsmlat -d lsmlat,0,0 '+pftdyn_new+' '+pftdyn_new+'.tmp')
         os.system('nccopy -3 -u '+pftdyn_new+'.tmp'+' '+pftdyn_new+'.tmp2')
-        os.system('ncpdq -a lsmlon,record '+pftdyn_new+'.tmp2 '+pftdyn_new+'.tmp3')
-        os.system('ncwa -O -a lsmlon -d lsmlon,0,0 '+pftdyn_new+'.tmp3 '+pftdyn_new+'.tmp4')
+        os.system('ncpdq -h -a lsmlon,record '+pftdyn_new+'.tmp2 '+pftdyn_new+'.tmp3')
+        os.system('ncwa -h -O -a lsmlon -d lsmlon,0,0 '+pftdyn_new+'.tmp3 '+pftdyn_new+'.tmp4')
         os.system('ncrename -h -O -d record,gridcell '+pftdyn_new+'.tmp4 '+pftdyn_new+'.tmp5')
 
         os.system('mv '+pftdyn_new+'.tmp5 '+pftdyn_new)

@@ -67,6 +67,10 @@ parser.add_option("--res", dest="res", default="CLM_USRDAT", \
                       help='Resoultion for global simulation')
 parser.add_option("--point_list", dest="point_list", default='', \
                   help = 'File containing list of points to run')
+parser.add_option("--point_area_kmxkm", dest="point_area_kmxkm", default=None, \
+                  help = 'user-specific area in kmxkm of each point in point list (unstructured')
+parser.add_option("--point_area_degxdeg", dest="point_area_degxdeg", default=None, \
+                  help = 'user-specific area in degreeXdegree of each point in point list (unstructured')
 parser.add_option("--pft", dest="mypft", default=-1, \
                   help = 'Use this PFT for all gridcells')
 parser.add_option("--site_forcing", dest="site_forcing", default='', \
@@ -297,15 +301,15 @@ elif(options.domainfile!="" and options.surffile!="" and \
 
 #Set default model root
 if (options.csmdir == ''):
-   if (os.path.exists('../E3SM')):
-       options.csmdir = os.path.abspath('../E3SM')
-       print('Model root not specified.  Defaulting to '+options.csmdir)
-   else:
-       print('Error:  Model root not specified.  Please set using --model_root')
-       sys.exit(1)
+    if (os.path.exists('../E3SM')):
+        options.csmdir = os.path.abspath('../E3SM')
+        print('Model root not specified.  Defaulting to '+options.csmdir)
+    else:
+        print('Error:  Model root not specified.  Please set using --model_root')
+        sys.exit(1)
 elif (not os.path.exists(options.csmdir)):
-     print('Error:  Model root '+options.csmdir+' does not exist.')
-     sys.exit(1)
+    print('Error:  Model root '+options.csmdir+' does not exist.')
+    sys.exit(1)
 
 #machine info:  cores per node
 ppn=1
@@ -341,13 +345,13 @@ PTCLMdir = os.getcwd()
 
 #set model if not specified
 if (options.mymodel == ''):
-  if ('clm5' in options.csmdir): 
-      options.mymodel = 'CLM5'
-  elif ('E3SM' in options.csmdir or 'e3sm' in options.csmdir or 'ACME' in options.csmdir):
-      options.mymodel = 'ELM'
-  else:
-      print('Error:  Model not specified')
-      sys.exit(1)
+    if ('clm5' in options.csmdir): 
+        options.mymodel = 'CLM5'
+    elif ('E3SM' in options.csmdir or 'e3sm' in options.csmdir or 'ACME' in options.csmdir):
+        options.mymodel = 'ELM'
+    else:
+        print('Error:  Model not specified')
+        sys.exit(1)
 
 #check for valid csm directory
 if (os.path.exists(options.csmdir) == False):
@@ -404,8 +408,8 @@ CNPstamp = 'c180529'
 if (options.istrans or '20TR' in compset):
     #ignore spinup option if transient compset
     if (options.ad_spinup or options.exit_spinup):
-      print('Spinup options not available for transient compset.')
-      sys.exit(1)
+        print('Spinup options not available for transient compset.')
+        sys.exit(1)
     #finidat is required for transient compset
     if (options.finidat_case == '' and options.finidat == ''):
         print('Error:  must provide initial data file for I20TR compsets')
@@ -416,11 +420,11 @@ finidat=''
 finidat_year=int(options.finidat_year)
 
 if ('CN' in compset or 'ECA' in compset):
-  mybgc = 'CN'
+    mybgc = 'CN'
 elif ('ED' in compset):
-  mybgc = 'ED'
+    mybgc = 'ED'
 else:
-  mybgc = 'none'
+    mybgc = 'none'
 
 if (options.exit_spinup):
     if (options.mycaseid != ''):
@@ -569,8 +573,15 @@ if (options.nopointdata == False):
         ptcmd = ptcmd + ' --crop'
     if (isglobal):
         ptcmd = ptcmd + ' --res '+options.res
+        
+        # if using global dataset to extract for running at a list of grid-points
         if (options.point_list != ''):
             ptcmd = ptcmd+' --point_list '+options.point_list
+            # changing resolution of extracted grid point area
+            if(options.point_area_kmxkm!=None):# area in a square measured by kmxkm
+                ptcmd = ptcmd+' --point_area_kmxkm '+options.point_area_kmxkm
+            elif(options.point_area_degxdeg!=None):# area in a square measured by degreexdegree
+                ptcmd = ptcmd+' --point_area_degxdeg '+options.point_area_degxdeg
 
     else:
         ptcmd = ptcmd + ' --site '+options.site+' --sitegroup '+options.sitegroup
@@ -694,9 +705,9 @@ os.chdir(csmdir+'/cime/scripts')
 tmpdir = PTCLMdir+'/temp'
 
 if (options.mycaseid == ''):
-  myscriptsdir = 'none'
+    myscriptsdir = 'none'
 else:
-  myscriptsdir = options.mycaseid
+    myscriptsdir = options.mycaseid
 
 os.system('mkdir -p '+tmpdir)
 if (options.mod_parm_file != ''):
@@ -705,24 +716,25 @@ else:
     os.system('nccopy -3 '+options.ccsm_input+'/lnd/clm2/paramdata/'+parm_file+' ' \
               +tmpdir+'/clm_params.nc')
     myncap = 'ncap'
-    if ('compy' in options.machine or 'ubuntu' in options.machine):
-      myncap='ncap2'
+    if ('compy' in options.machine or 'ubuntu' in options.machine \
+          or 'mymac' in options.machine):
+        myncap='ncap2'
     if (options.humhol or options.marsh):
-      print('Adding hummock-hollow parameters (default for SPRUCE site)')
-      print('humhol_ht = 0.15m')
-      print('hum_frac  = 0.64')
-      print('humhol_dist = 1.0m')
-      print('qflx_h2osfc_surfrate = 1.0e-7')
-      print('setting rsub_top_globalmax = 1.2e-5')
-      print('Making br_mr a PFT-specific parameter')
-      os.system(myncap+' -O -s "humhol_ht = br_mr*0+0.15" '+tmpdir+'/clm_params.nc '+tmpdir+'/clm_params.nc')
-      os.system(myncap+' -O -s "hum_frac = br_mr*0+0.64" '+tmpdir+'/clm_params.nc '+tmpdir+'/clm_params.nc')
-      os.system(myncap+' -O -s "humhol_dist = br_mr*0+1.0" '+tmpdir+'/clm_params.nc '+tmpdir+'/clm_params.nc')
-      os.system(myncap+' -O -s "qflx_h2osfc_surfrate = br_mr*0+1.0e-7" '+tmpdir+'/clm_params.nc '+tmpdir+'/clm_params.nc')
-      os.system(myncap+' -O -s "rsub_top_globalmax = br_mr*0+1.2e-5" '+tmpdir+'/clm_params.nc '+tmpdir+'/clm_params.nc')
-      os.system(myncap+' -O -s "h2osoi_offset = br_mr*0" '+tmpdir+'/clm_params.nc '+tmpdir+'/clm_params.nc')
-      os.system(myncap+' -O -s "br_mr = flnr" '+tmpdir+'/clm_params.nc '+tmpdir+'/clm_params.nc')
-      ierr = nffun.putvar(tmpdir+'/clm_params.nc','br_mr', flnr*0.0+2.52e-6)
+        print('Adding hummock-hollow parameters (default for SPRUCE site)')
+        print('humhol_ht = 0.15m')
+        print('hum_frac  = 0.64')
+        print('humhol_dist = 1.0m')
+        print('qflx_h2osfc_surfrate = 1.0e-7')
+        print('setting rsub_top_globalmax = 1.2e-5')
+        print('Making br_mr a PFT-specific parameter')
+        os.system(myncap+' -O -s "humhol_ht = br_mr*0+0.15" '+tmpdir+'/clm_params.nc '+tmpdir+'/clm_params.nc')
+        os.system(myncap+' -O -s "hum_frac = br_mr*0+0.64" '+tmpdir+'/clm_params.nc '+tmpdir+'/clm_params.nc')
+        os.system(myncap+' -O -s "humhol_dist = br_mr*0+1.0" '+tmpdir+'/clm_params.nc '+tmpdir+'/clm_params.nc')
+        os.system(myncap+' -O -s "qflx_h2osfc_surfrate = br_mr*0+1.0e-7" '+tmpdir+'/clm_params.nc '+tmpdir+'/clm_params.nc')
+        os.system(myncap+' -O -s "rsub_top_globalmax = br_mr*0+1.2e-5" '+tmpdir+'/clm_params.nc '+tmpdir+'/clm_params.nc')
+        os.system(myncap+' -O -s "h2osoi_offset = br_mr*0" '+tmpdir+'/clm_params.nc '+tmpdir+'/clm_params.nc')
+        os.system(myncap+' -O -s "br_mr = flnr" '+tmpdir+'/clm_params.nc '+tmpdir+'/clm_params.nc')
+        ierr = nffun.putvar(tmpdir+'/clm_params.nc','br_mr', flnr*0.0+2.52e-6)
     os.system(myncap+' -O -s "crit_gdd1 = flnr" '+tmpdir+'/clm_params.nc '+tmpdir+'/clm_params.nc')
     os.system(myncap+' -O -s "crit_gdd2 = flnr" '+tmpdir+'/clm_params.nc '+tmpdir+'/clm_params.nc')
     flnr = nffun.getvar(tmpdir+'/clm_params.nc','flnr')
@@ -733,10 +745,10 @@ os.system('chmod u+w ' +tmpdir+'/clm_params.nc')
 if (options.parm_file != ''):
     pftfile = tmpdir+'/clm_params.nc'
     if ('/' not in options.parm_file):
-       #assume in pointclm directory
-       input  = open(PTCLMdir+'/'+options.parm_file)
+        #assume in pointclm directory
+        input  = open(PTCLMdir+'/'+options.parm_file)
     else:   #assume full path given
-       input   = open(os.path.abspath(options.parm_file))
+        input   = open(os.path.abspath(options.parm_file))
     for s in input:
         if s[0:1] != '#':
             values = s.split()
@@ -747,7 +759,7 @@ if (options.parm_file != ''):
                 if (float(values[1]) > 0):
                     thisvar[int(values[1])] = float(values[2])
                 else:
-                  thisvar[...] = float(values[2])
+                    thisvar[...] = float(values[2])
             ierr = nffun.putvar(pftfile, values[0], thisvar)
     input.close()
 
@@ -761,10 +773,10 @@ if (options.parm_vals != ''):
         if (len(parm_data) == 2):
             thisvar[...] = float(parm_data[1])
         elif (len(parm_data) == 3): 
-           if (float(parm_data[1]) >= 0):
-               thisvar[int(parm_data[1])] = float(parm_data[2])
-           else: 
-               thisvar[...] = float(parm_data[2])
+            if (float(parm_data[1]) >= 0):
+                thisvar[int(parm_data[1])] = float(parm_data[2])
+            else: 
+                thisvar[...] = float(parm_data[2])
         ierr =  nffun.putvar(pftfile, parm_data[0], thisvar)
            
 #parameter (soil order dependent) modifications if desired    ::X.YANG 
@@ -810,12 +822,13 @@ cmd = './create_newcase --case '+casedir+' --mach '+options.machine+' --compset 
            options.mpilib+' --walltime '+str(options.walltime)+ \
           ':00:00 '+'--handle-preexisting-dirs u'
 if (options.mymodel == 'CLM5'):
-   cmd = cmd+' --run-unsupported'
+    cmd = cmd+' --run-unsupported'
 if (options.project != ''):
-   cmd = cmd+' --project '+options.project
+    cmd = cmd+' --project '+options.project
 if (options.compiler != ''):
-   cmd = cmd+' --compiler '+options.compiler
+    cmd = cmd+' --compiler '+options.compiler
 cmd = cmd+' > create_newcase.log'
+print(cmd)
 result = os.system(cmd)
 
 if (os.path.isdir(casedir)):
