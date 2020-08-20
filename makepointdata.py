@@ -66,7 +66,7 @@ ccsm_input = os.path.abspath(options.ccsm_input)
 #------------------- get site information ----------------------------------
 
 #Remove existing temp files
-os.system('rm temp/*.nc')
+os.system('find ./temp/ -name "*.nc*" -exec rm {} \; ')
 
 lat_bounds = options.lat_bounds.split(',')
 lon_bounds = options.lon_bounds.split(',')
@@ -321,6 +321,7 @@ if(options.nodomain == False):
     area_orig = nffun.getvar(surffile_orig, 'AREA')
 
     domainfile_list=''
+    domainfile_tmp = 'domain??????.nc' # filename pattern of 'domainfile_new'
     for n in range(0,n_grids):
         nst = str(1000000+n)[1:]
         domainfile_new = './temp/domain'+nst+'.nc'
@@ -331,7 +332,7 @@ if(options.nodomain == False):
         if (isglobal):
             os.system('cp '+domainfile_orig+' '+domainfile_new)
         else:
-            os.system('ncks -h -d ni,'+str(xgrid_min[n])+','+str(xgrid_max[n])+' -d nj,'+str(ygrid_min[n])+ \
+            os.system('ncks -O -h -d ni,'+str(xgrid_min[n])+','+str(xgrid_max[n])+' -d nj,'+str(ygrid_min[n])+ \
                   ','+str(ygrid_max[n])+' '+domainfile_orig+' '+domainfile_new)
     
         # scaling x/y length for original grid
@@ -408,7 +409,7 @@ if(options.nodomain == False):
             os.system('ncks  -h -O --mk_rec_dim nj '+domainfile_new+' '+domainfile_new)
         elif (options.mymask != ''):
             print('Applying mask from '+options.mymask)
-            os.system('ncks -h -d lon,'+str(xgrid_min[n])+','+str(xgrid_max[n])+' -d lat,'+str(ygrid_min[n])+ \
+            os.system('ncks -h -O -d lon,'+str(xgrid_min[n])+','+str(xgrid_max[n])+' -d lat,'+str(ygrid_min[n])+ \
                   ','+str(ygrid_max[n])+' '+options.mymask+' mask_temp.nc')
             newmask = nffun.getvar('mask_temp.nc', 'PNW_mask')
             ierr = nffun.putvar(domainfile_new, 'mask', newmask)
@@ -418,30 +419,39 @@ if(options.nodomain == False):
     
     domainfile_new = './temp/domain.nc'
     if (n_grids > 1):
-        os.system('ncrcat -h '+domainfile_list+' '+domainfile_new)
-        os.system('nccopy -u  '+domainfile_new+' '+domainfile_new+'.tmp')
-        os.system('ncpdq -h -O -a ni,nj '+domainfile_new+'.tmp '+domainfile_new)
-        #os.system('ncwa -h -O -a ni -d ni,0,0 '+domainfile_new+'.tmp1 '+domainfile_new+'.tmp2')
-        os.system('ncrename -h -O -d ni,ni_temp '+domainfile_new+' '+domainfile_new+' ')
-        os.system('ncrename -h -O -d nj,ni '+domainfile_new+' '+domainfile_new+' ')
-        os.system('ncrename -h -O -d ni_temp,nj '+domainfile_new+' '+domainfile_new+' ')
-        os.system('rm ./temp/domain??????.nc*')
-        #os.system('rm ./temp/domain??????.nc*')
-        os.system('find ./temp/ -name "domain??????.nc*" -exec rm {} \;')
+        #ierr = os.system('ncrcat -h '+domainfile_list+' '+domainfile_new) # OS error if '_list' too long
+        ierr = os.system('find -s ./temp/ -name "'+domainfile_tmp+ \
+                         '" | xargs ls | sort | ncrcat -O -h -o'+domainfile_new)
+        if(ierr!=0): print('Error: ncrcat -', ierr); os.sys.exit()
+        ierr = os.system('nccopy -7 -u '+domainfile_new+' '+domainfile_new+'.tmp')
+        if(ierr!=0): print('Error: nccopy', ierr); os.sys.exit()
+        ierr = os.system('ncpdq -h -O -a ni,nj '+domainfile_new+'.tmp '+domainfile_new)
+        if(ierr!=0): print('Error: ncpdq', ierr); os.sys.exit()
+        ierr = os.system('ncrename -h -O -d ni,ni_temp '+domainfile_new+' '+domainfile_new+' ')
+        if(ierr!=0): print('Error: ncrename', ierr); os.sys.exit()
+        ierr = os.system('ncrename -h -O -d nj,ni '+domainfile_new+' '+domainfile_new+' ')
+        if(ierr!=0): print('Error: ncrename', ierr); os.sys.exit()
+        ierr = os.system('ncrename -h -O -d ni_temp,nj '+domainfile_new+' '+domainfile_new+' ')
+        if(ierr!=0): print('Error: ncrename', ierr); os.sys.exit()
+        os.system('find ./temp/ -name '+domainfile_tmp+' -exec rm {} \;')
         os.system('rm '+domainfile_new+'.tmp*')
     else:
-        os.system('mv '+domainfile_list+' '+domainfile_new)
+        if(ierr==0): ierr = os.system('mv '+domainfile_list+' '+domainfile_new)
     
     #
-    #os.system("ncap2 -h -s '{xc(0:)=lon; yc(0:)=lat})' " + domainfile_new.nc+" "+ domainfile_new.nc)
-    #
-    print("INFO: Extracted and Compiled '"+ domainfile_new + "' FROM: '" + domainfile_orig+"'! \n")
+    if(ierr==0): 
+        print("INFO: Extracted and Compiled '"+ domainfile_new + "' FROM: '" + domainfile_orig+"'! \n")
+    else:
+        print("FAILED: Extracted and Compiled '"+ domainfile_new + "' FROM: '" + domainfile_orig+"'! \n")
+        os.sys.exit(-1)
+
 
 #-------------------- create surface data ----------------------------------
 if(options.nosurfdata == False):
     print('\nCreating surface data')
     
     surffile_list = ''
+    surffile_tmp = 'surfdata??????.nc' # filename pattern of 'surffile_new'
     for n in range(0,n_grids):
         nst = str(1000000+n)[1:]
         surffile_new =  './temp/surfdata'+nst+'.nc'
@@ -452,10 +462,10 @@ if(options.nosurfdata == False):
             os.system('cp '+surffile_orig+' '+surffile_new)
         else:
             if ('ne' in options.res):
-                os.system('ncks -h --fix_rec_dmn time -d gridcell,'+str(xgrid_min[n])+','+str(xgrid_max[n])+ \
+                os.system('ncks -h -O --fix_rec_dmn time -d gridcell,'+str(xgrid_min[n])+','+str(xgrid_max[n])+ \
                 ' '+surffile_orig+' '+surffile_new)
             else:
-                os.system('ncks -h --fix_rec_dmn time -d lsmlon,'+str(xgrid_min[n])+','+str(xgrid_max[n])+ \
+                os.system('ncks -h -O --fix_rec_dmn time -d lsmlon,'+str(xgrid_min[n])+','+str(xgrid_max[n])+ \
                  ' -d lsmlat,'+str(ygrid_min[n])+','+str(ygrid_max[n])+' '+surffile_orig+' '+surffile_new)
     
         if (issite):
@@ -664,18 +674,24 @@ if(options.nosurfdata == False):
     surffile_new = './temp/surfdata.nc'
     
     if (n_grids > 1):
-        os.system('ncecat '+surffile_list+' '+surffile_new)
-        #os.system('rm ./temp/surfdata?????.nc*')
-        os.system('find ./temp/ -name "surfdata??????.nc*" -exec rm {} \;')
-        #remove ni dimension
-        os.system('ncwa -h -O -a lsmlat -d lsmlat,0,0 '+surffile_new+' '+surffile_new+'.tmp')
-        os.system('nccopy -3 -u '+surffile_new+'.tmp'+' '+surffile_new+'.tmp2')
-        os.system('ncpdq -h -a lsmlon,record '+surffile_new+'.tmp2 '+surffile_new+'.tmp3')
-        os.system('ncwa -h -O -a lsmlon -d lsmlon,0,0 '+surffile_new+'.tmp3 '+surffile_new+'.tmp4')
-        os.system('ncrename -h -O -d record,gridcell '+surffile_new+'.tmp4 '+surffile_new+'.tmp5')
-    
+        #ierr = os.system('ncecat '+surffile_list+' '+surffile_new) # not works with too long '_list'
+        ierr = os.system('find ./temp/ -name "'+surffile_tmp+ \
+                         '" | xargs ls | sort | ncecat -O -h -o'+surffile_new)
+        if(ierr!=0): print('Error: ncecat '); os.sys.exit()
+        ierr = os.system('ncwa -h -O -a lsmlat -d lsmlat,0,0 '+surffile_new+' '+surffile_new+'.tmp')
+        if(ierr!=0): print('Error: ncwa '); os.sys.exit()
+        ierr = os.system('nccopy -7 -u '+surffile_new+'.tmp'+' '+surffile_new+'.tmp2')
+        if(ierr!=0): print('Error: nccopy '); os.sys.exit()
+        ierr = os.system('ncpdq -h -a lsmlon,record '+surffile_new+'.tmp2 '+surffile_new+'.tmp3')
+        if(ierr!=0): print('Error: ncpdq '); os.sys.exit()
+        ierr = os.system('ncwa -h -O -a lsmlon -d lsmlon,0,0 '+surffile_new+'.tmp3 '+surffile_new+'.tmp4')
+        if(ierr!=0): print('Error: ncwa '); os.sys.exit()
+        ierr = os.system('ncrename -h -O -d record,gridcell '+surffile_new+'.tmp4 '+surffile_new+'.tmp5')
+        if(ierr!=0): print('Error: ncrename '); os.sys.exit()
         os.system('mv '+surffile_new+'.tmp5 '+surffile_new)
         os.system('rm '+surffile_new+'.tmp*')
+        #os.system('rm ./temp/surfdata?????.nc*')
+        os.system('find ./temp/ -name "'+surffile_tmp+'" -exec rm {} \;')
     else:
         os.system('mv '+surffile_list+' '+surffile_new)
 
@@ -687,6 +703,7 @@ if (options.nopftdyn == False):
 
     print('\nCreating dynpft data')
     pftdyn_list = ''
+    pftdyn_tmp = 'surfdata.pftdyn??????.nc' # filename pattern of 'pftdyn_new'
     for n in range(0,n_grids):
         nst = str(1000000+n)[1:]
         pftdyn_new = './temp/surfdata.pftdyn'+nst+'.nc'
@@ -698,10 +715,10 @@ if (options.nopftdyn == False):
             os.system('cp '+pftdyn_orig+' '+pftdyn_new)
         else:
             if ('ne' in options.res):
-                os.system('ncks -h --fix_rec_dmn time -d gridcell,'+str(xgrid_min[n])+','+str(xgrid_max[n])+ \
+                os.system('ncks -h -O --fix_rec_dmn time -d gridcell,'+str(xgrid_min[n])+','+str(xgrid_max[n])+ \
                       ' '+pftdyn_orig+' '+pftdyn_new)
             else:
-                os.system('ncks -h --fix_rec_dmn time -d lsmlon,'+str(xgrid_min[n])+','+str(xgrid_max[n])+ \
+                os.system('ncks -h -O --fix_rec_dmn time -d lsmlon,'+str(xgrid_min[n])+','+str(xgrid_max[n])+ \
                       ' -d lsmlat,'+str(ygrid_min[n])+','+str(ygrid_max[n])+' '+pftdyn_orig+' '+pftdyn_new)
         if (issite):
             landfrac     = nffun.getvar(pftdyn_new, 'LANDFRAC_PFT')
@@ -851,17 +868,23 @@ if (options.nopftdyn == False):
         os.system('rm -rf '+pftdyn_new)
 
     if (n_grids > 1):
-        os.system('ncecat -h '+pftdyn_list+' '+pftdyn_new)
+        #ierr = os.system('ncecat -h '+pftdyn_list+' '+pftdyn_new) # not works with too long '_list'
+        ierr = os.system('find ./temp/ -name "'+pftdyn_tmp+ \
+                         '" | xargs ls | sort | ncecat -O -h -o'+pftdyn_new)
+        if(ierr!=0): print('Error: ncecat '); os.sys.exit()
+        ierr = os.system('ncwa -h -O -a lsmlat -d lsmlat,0,0 '+pftdyn_new+' '+pftdyn_new+'.tmp')
+        if(ierr!=0): print('Error: ncwa '); os.sys.exit()
+        ierr = os.system('nccopy -7 -u '+pftdyn_new+'.tmp'+' '+pftdyn_new+'.tmp2')
+        if(ierr!=0): print('Error: nccopy '); os.sys.exit()
+        ierr = os.system('ncpdq -h -a lsmlon,record '+pftdyn_new+'.tmp2 '+pftdyn_new+'.tmp3')
+        if(ierr!=0): print('Error: ncpdq '); os.sys.exit()
+        ierr = os.system('ncwa -h -O -a lsmlon -d lsmlon,0,0 '+pftdyn_new+'.tmp3 '+pftdyn_new+'.tmp4')
+        if(ierr!=0): print('Error: ncwa '); os.sys.exit()
+        ierr = os.system('ncrename -h -O -d record,gridcell '+pftdyn_new+'.tmp4 '+pftdyn_new+'.tmp5')
+        if(ierr!=0): print('Error: ncrename '); os.sys.exit()
 
         #os.system('rm ./temp/surfdata.pftdyn?????.nc*') # 'rm' not works for too long file list
-        os.system('find ./temp/ -name "surfdata.pftdyn??????.nc*" -exec rm {} \;')
-        #remove ni dimension
-        os.system('ncwa -h -O -a lsmlat -d lsmlat,0,0 '+pftdyn_new+' '+pftdyn_new+'.tmp')
-        os.system('nccopy -3 -u '+pftdyn_new+'.tmp'+' '+pftdyn_new+'.tmp2')
-        os.system('ncpdq -h -a lsmlon,record '+pftdyn_new+'.tmp2 '+pftdyn_new+'.tmp3')
-        os.system('ncwa -h -O -a lsmlon -d lsmlon,0,0 '+pftdyn_new+'.tmp3 '+pftdyn_new+'.tmp4')
-        os.system('ncrename -h -O -d record,gridcell '+pftdyn_new+'.tmp4 '+pftdyn_new+'.tmp5')
-
+        os.system('find ./temp/ -name "'+pftdyn_tmp+'" -exec rm {} \;')
         os.system('mv '+pftdyn_new+'.tmp5 '+pftdyn_new)
         os.system('rm '+pftdyn_new+'.tmp*')
     else:
